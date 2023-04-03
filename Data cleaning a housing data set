@@ -1,0 +1,176 @@
+
+-- Cleaning Data in SQL Queries
+
+Select *
+From PortfolioProject..NashvilleHousing
+
+-- Standardize/Change data format
+
+Select SaleDate, Convert(Date, SaleDate) 
+From PortfolioProject..NashvilleHousing
+
+Alter Table NashvilleHousing
+Add SaleDateConverted Date; 
+
+Update NashvilleHousing
+Set SaleDateConverted = Convert(Date,SaleDate)
+
+------------------------------------------------------------------------------------------------------------------
+
+-- Populate Property Address
+
+Select *
+From PortfolioProject..NashvilleHousing
+--Where PropertyAddress is not null
+order by ParcelID
+
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress, b.PropertyAddress)
+From PortfolioProject..NashvilleHousing a 
+Join PortfolioProject..NashvilleHousing b
+	on a.ParcelID = b.ParcelID
+	AND a.[UniqueID ] <> b.[UniqueID ]
+Where a.PropertyAddress is null
+
+Update a
+Set PropertyAddress = ISNULL(a.PropertyAddress, b.PropertyAddress)
+From PortfolioProject..NashvilleHousing a 
+Join PortfolioProject..NashvilleHousing b
+	on a.ParcelID = b.ParcelID
+	AND a.[UniqueID ] <> b.[UniqueID ]
+-- When running the initial query the table now comes up blank as there are no longer any Null fields, as we have successfully updated them
+
+------------------------------------------------------------------------------------------------------------------
+
+-- Breaking out address into individiual  columnds (address, city, state)
+
+Select PropertyAddress
+From PortfolioProject..NashvilleHousing
+
+-- using substrings and character indexes
+
+Select
+Substring(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1 ) as Address
+,Substring(PropertyAddress, CHARINDEX(',', PropertyAddress) +1, LEN(PropertyAddress)) as Address
+
+-- this finds the comma and removes it from the output
+From PortfolioProject..NashvilleHousing
+
+Alter Table NashvilleHousing
+Add PropertySplitAddress Nvarchar(255);
+
+Update NashvilleHousing
+Set PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1)
+
+Alter Table NashvilleHousing
+Add PropertySplitCity Nvarchar(255);
+
+Update NashvilleHousing
+Set PropertySplitCity = SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) +1, LEN(PropertyAddress))
+
+Select *
+From PortfolioProject..NashvilleHousing
+
+-- Now address is split into address and city it makes the data a lot more usable overall
+
+
+------------------------------------------------------------------------------------------------------------------
+
+Select OwnerAddress
+From PortfolioProject..NashvilleHousing
+
+-- now we want to split the parts of the owner addresses up, however we want an easier option that using substrings again
+
+Select
+PARSENAME(REPLACE(OwnerAddress, ',', '.'),3)
+, PARSENAME(REPLACE(OwnerAddress, ',', '.'),2)
+, PARSENAME(REPLACE(OwnerAddress, ',', '.'),1)
+From PortfolioProject..NashvilleHousing
+-- this is has now broken out address, city and state from the OwnerAddress field, a lot easier than using substrings
+
+Alter Table NashvilleHousing
+Add OwnerSplitAddress Nvarchar(255);
+
+Update NashvilleHousing
+Set OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress, ',', '.'),3)
+
+Alter Table NashvilleHousing
+Add OwnerSplitCity Nvarchar(255);
+
+Update NashvilleHousing
+Set OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress, ',', '.'),2)
+
+Alter Table NashvilleHousing
+Add OwnerSplitState Nvarchar(255);
+
+Update NashvilleHousing
+Set OwnerSplitState = PARSENAME(REPLACE(OwnerAddress, ',', '.'),1)
+
+Select *
+From PortfolioProject..NashvilleHousing
+
+--This has achieved a similar affect to the previous subquery version, just a lot easier/nicer to read
+
+------------------------------------------------------------------------------------------------------------------
+
+
+-- Change Y and N to Yes and NO in "Sold as Vacant" field
+
+Select Distinct(SoldAsVacant), Count(SoldAsVacant)
+From PortfolioProject..NashvilleHousing
+Group by SoldAsVacant
+Order by 2
+-- at this point there is duplicate fields for Yes and No, most of the records showing under 'Yes' or 'No' with a small number showing under 'Y' or 'N'
+
+
+
+Select SoldAsVacant
+, Case When SoldAsVacant = 'Y' THEN 'Yes'
+		When SoldAsVacant = 'N' THEN 'No'
+		ELSE SoldAsVacant
+		END
+From PortfolioProject..NashvilleHousing
+
+Update NashvilleHousing
+SET SoldAsVacant = Case When SoldAsVacant = 'Y' THEN 'Yes'
+		When SoldAsVacant = 'N' THEN 'No'
+		ELSE SoldAsVacant
+		END
+-- this updates the data and now when we call the sold as vacant data it all shows as only either Yes or No
+
+------------------------------------------------------------------------------------------------------------------
+
+-- Remove duplicates (using CTEs and window functions)
+
+With RowNumCTE AS(
+Select *, 
+	ROW_NUMBER() OVER (
+	PARTITION BY ParcelID,
+				 PropertyAddress,
+				 SalePrice,
+				 SaleDate,
+				 LegalReference
+				 ORDER BY
+					UniqueID
+					) row_num
+
+From PortfolioProject..NashvilleHousing
+--order by ParcelID
+) 
+Select *
+From RowNumCTE
+Where row_num > 1
+--Order by PropertyAddress
+
+
+------------------------------------------------------------------------------------------------------------------
+
+-- Delete Unused columns
+
+Select *
+From PortfolioProject..NashvilleHousing
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress
+
+ALTER TABLE PortfolioProject..NashvilleHousing
+DROP COLUMN SaleDate
